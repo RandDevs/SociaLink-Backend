@@ -3,10 +3,6 @@ import Post from "../models/Post.js";
 
 export const searchUsers = async (req, res) => {
   const { userId, displayName, limit, skipUser } = req.body;
-  console.log("🚀 ~ searchUsers ~ skipUser:", skipUser);
-  console.log("🚀 ~ searchUsers ~ limit:", limit);
-  console.log("🚀 ~ searchUsers ~ displayName:", displayName);
-  console.log("🚀 ~ searchUsers ~ userId:", userId);
 
   try {
     const users = await User.find({
@@ -19,7 +15,7 @@ export const searchUsers = async (req, res) => {
 
     res.status(200).json({ users });
   } catch (err) {
-    res.status(404).json({ status: "error", msg: "Internal serever error" });
+    res.status(500).json({ status: "error", msg: "Internal serever error" });
   }
 };
 
@@ -37,6 +33,6 @@ export const searchHashtags = async (req, res) => {
 
     res.status(200).json({ posts });
   } catch (err) {
-    res.status(404).json({ status: "error", msg: "Internal server error" });
+    res.status(500).json({ status: "error", msg: "Internal server error" });
   }
 };

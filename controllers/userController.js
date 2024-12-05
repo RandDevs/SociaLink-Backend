@@ -119,6 +119,19 @@ export const getNotifications = async (req, res) => {
   }
 };
 
+export const getNewestUser = async (req, res) => {
+  const { limit } = req.query;
+
+  try {
+    const users = await User.find({ displayName: { $exists: true, $ne: null } })
+      .sort({ createdAt: -1 })
+      .limit(Number(limit));
+    res.status(200).json({ users });
+  } catch (err) {
+    res.status(500).json({ status: "error", msg: "Internal serever error" });
+  }
+};
+
 // * FOLLOW HANDLER
 export const handleFollow = async (req, res) => {
   const { userId, targetUserId } = req.params;
