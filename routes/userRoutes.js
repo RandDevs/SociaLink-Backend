@@ -1,18 +1,19 @@
 import express from "express";
 import {
-	createUserProfile,
-	uploadProfilePicture,
-	uploadBanner,
-	getNotifications,
-	getUserProfile,
-	handleFollow,
-	handleUnfollow,
-	handleDeleteAccount,
+  createUserProfile,
+  uploadProfilePicture,
+  uploadBanner,
+  getNotifications,
+  getUserProfile,
+  handleFollow,
+  handleUnfollow,
+  handleDeleteAccount,
+  getNewestUser,
 } from "../controllers/userController.js";
 import { authenticateToken } from "../middleware/authMiddleware.js";
 import {
-	uploadProfilePict,
-	uploadBanner as bannerUpload,
+  uploadProfilePict,
+  uploadBanner as bannerUpload,
 } from "../middleware/uploadMiddleware.js";
 
 const router = express.Router();
@@ -21,18 +22,21 @@ const router = express.Router();
 router.post("/createUserProfile", authenticateToken, createUserProfile);
 
 router.post(
-	"/upload-profile-pict",
-	uploadProfilePict.single("profilePict"),
-	uploadProfilePicture
+  "/upload-profile-pict",
+  uploadProfilePict.single("profilePict"),
+  uploadProfilePicture
 );
 
 router.post("/upload-banner", bannerUpload.single("banner"), uploadBanner);
+
+// Get newest user
+router.get("/get/users", getNewestUser);
 
 // Notification page
 router.post("/get/notifications", authenticateToken, getNotifications);
 
 // User profile page
-router.post("/get/userProfile", authenticateToken, getUserProfile);
+router.post("/get/userProfile", getUserProfile);
 
 // handle follow
 router.post("/:userId/follow/:targetUserId", handleFollow);
