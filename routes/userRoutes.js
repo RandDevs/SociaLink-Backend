@@ -19,7 +19,7 @@ router.get("/get/users", getNewestUser);
 router.post("/get/notifications", authenticateToken, getNotifications);
 
 // User profile page
-router.get("/get/userProfile", getUserProfile);
+router.get("/get/userProfile/:userId", getUserProfile);
 
 // handle follow
 router.post("/:userId/follow/:targetUserId", handleFollow);

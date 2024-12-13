@@ -7,8 +7,7 @@ import path from "path";
 export const uploadProfilePicture = async (req, res) => {
   try {
     const user = await User.findById(req.body._id);
-    if (!user)
-      return res.status(404).json({ status: "error", msg: "User not found" });
+    if (!user) return res.status(404).json({ status: "error", msg: "User not found" });
 
     const picturePath = req.file.path;
     await User.updateOne({ _id: req.body._id }, { $set: { picturePath } });
@@ -23,8 +22,7 @@ export const uploadProfilePicture = async (req, res) => {
 export const uploadBanner = async (req, res) => {
   try {
     const user = await User.findById(req.body._id);
-    if (!user)
-      return res.status(404).json({ status: "error", msg: "User not found" });
+    if (!user) return res.status(404).json({ status: "error", msg: "User not found" });
 
     const bannerPath = req.file.path;
     await User.updateOne({ _id: req.body._id }, { $set: { bannerPath } });
@@ -42,27 +40,20 @@ export const createUserProfile = async (req, res) => {
     const { _id, displayName, location, bio } = req.body;
 
     const user = await User.findById(_id);
-    if (!user)
-      return res.status(404).json({ status: "error", msg: "User not found" });
+    if (!user) return res.status(404).json({ status: "error", msg: "User not found" });
 
     // Check for duplicate display name
     const duplicateDisplayName = await User.findOne({ displayName });
     if (duplicateDisplayName) {
-      return res
-        .status(409)
-        .json({ status: "warn", msg: "Display Name already in use" });
+      return res.status(409).json({ status: "warn", msg: "Display Name already in use" });
     }
 
     if (displayName.length > 20) {
-      return res
-        .status(409)
-        .json({ status: "warn", msg: "Display name is too long" });
+      return res.status(409).json({ status: "warn", msg: "Display name is too long" });
     }
 
     if (location.length >= 25) {
-      return res
-        .status(409)
-        .json({ status: "warn", msg: "Location is too long" });
+      return res.status(409).json({ status: "warn", msg: "Location is too long" });
     }
 
     if (bio.length >= 200) {
@@ -71,10 +62,7 @@ export const createUserProfile = async (req, res) => {
 
     await User.updateOne({ _id }, { $set: { displayName, location, bio } });
 
-    const accessToken = jwt.sign(
-      { userId: _id },
-      process.env.ACCESS_TOKEN_SECRET
-    );
+    const accessToken = jwt.sign({ userId: _id }, process.env.ACCESS_TOKEN_SECRET);
 
     res.status(200).json({
       status: "success",
@@ -90,7 +78,7 @@ export const createUserProfile = async (req, res) => {
 
 // * GET USER INFO
 export const getUserProfile = async (req, res) => {
-  const { userId } = req.body;
+  const { userId } = req.params;
   try {
     const user = await User.findById(userId);
     const userPosts = await Post.find({ userId });
@@ -110,8 +98,7 @@ export const getNotifications = async (req, res) => {
   const { userId } = req.body;
   try {
     const user = await User.findById(userId);
-    if (!user)
-      return res.status(404).json({ status: "error", msg: "User not found" });
+    if (!user) return res.status(404).json({ status: "error", msg: "User not found" });
 
     res.status(200).json({ notifications: user.notifications });
   } catch (err) {
@@ -230,9 +217,7 @@ export const handleDeleteAccount = async (req, res) => {
     // }
 
     // await User.findByIdAndDelete(userId);
-    res
-      .status(200)
-      .json({ status: "success", msg: "Account deleted!", userPosts });
+    res.status(200).json({ status: "success", msg: "Account deleted!", userPosts });
   } catch (err) {
     console.log(err.message);
     res.status(500).json({ status: "error", msg: "Internal server error!" });
