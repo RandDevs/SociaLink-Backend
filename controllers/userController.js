@@ -1,6 +1,8 @@
 import Post from "../models/Post.js";
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
+import Comment from "../models/Comment.js"; // Import Comment
+// import Notification from "../models/Notification.js"; // Akan kita import jika sudah ada model Notifikasi terpisah
 import fs from "fs";
 import path from "path";
 // * UPLOADS HANDLER
@@ -39,14 +41,17 @@ export const uploadBanner = async (req, res) => {
 // * CREATE USER PROFILE
 export const createUserProfile = async (req, res) => {
   try {
-    const { _id, displayName, location, bio } = req.body;
-
-    const user = await User.findById(_id);
+    const { displayName, location, bio } = req.body;
+    const userId = req.user.userId;
+    const user = await User.findById(userId);
     if (!user)
       return res.status(404).json({ status: "error", msg: "User not found" });
 
     // Check for duplicate display name
-    const duplicateDisplayName = await User.findOne({ displayName });
+    const duplicateDisplayName = await User.findOne({
+      displayName,
+      _id: { $ne: userId },
+    });
     if (duplicateDisplayName) {
       return res
         .status(409)
@@ -55,32 +60,115 @@ export const createUserProfile = async (req, res) => {
 
     if (displayName.length > 20) {
       return res
-        .status(409)
+        .status(400)
         .json({ status: "warn", msg: "Display name is too long" });
     }
 
-    if (location.length >= 25) {
+    if (location && location.length >= 25) {
       return res
-        .status(409)
+        .status(400)
         .json({ status: "warn", msg: "Location is too long" });
     }
 
-    if (bio.length >= 200) {
-      return res.status(409).json({ status: "warn", msg: "Bio is too long" });
+    if (bio && bio.length >= 200) {
+      return res.status(400).json({ status: "warn", msg: "Bio is too long" });
     }
 
-    await User.updateOne({ _id }, { $set: { displayName, location, bio } });
+    // Update fields only if they are provided
+    const updateFields = {};
+    if (displayName !== undefined) updateFields.displayName = displayName;
+    if (location !== undefined) updateFields.location = location;
+    if (bio !== undefined) updateFields.bio = bio;
+
+    await User.updateOne({ _id: userId }, { $set: updateFields });
 
     const accessToken = jwt.sign(
       { userId: _id },
       process.env.ACCESS_TOKEN_SECRET
     );
+    const updatedUser = await User.findById(userId).select("-password");
 
     res.status(200).json({
       status: "success",
       msg: "Profile updated",
-      _id,
+      userId: updatedUser._id,
       accessToken,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: "error", msg: "Internal server error" });
+  }
+};
+
+// * UPDATE USER PROFILE (Rute baru untuk PUT /api/users/profile)
+export const updateUserProfile = async (req, res) => {
+  try {
+    const { displayName, location, bio, email, password } = req.body;
+    const userId = req.user.userId; // Dari authenticateToken
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ status: "error", msg: "User not found" });
+    }
+
+    // Validasi dan update fields
+    if (email && email !== user.email) {
+      if (!isEmail(email)) {
+        return res
+          .status(400)
+          .json({ status: "error", msg: "Invalid email format" });
+      }
+      const duplicateUser = await User.findOne({ email, _id: { $ne: userId } });
+      if (duplicateUser) {
+        return res
+          .status(409)
+          .json({ status: "warn", msg: "Email already exists" });
+      }
+      user.email = email;
+    }
+
+    if (password) {
+      // Password akan dihash otomatis oleh pre('save') hook
+      if (password.length < 8 || password.length > 64) {
+        return res
+          .status(400)
+          .json({
+            status: "error",
+            msg: "Password must be between 8 and 64 characters",
+          });
+      }
+      user.password = password;
+    }
+
+    if (displayName) {
+      const duplicateDisplayName = await User.findOne({
+        displayName,
+        _id: { $ne: userId },
+      });
+      if (duplicateDisplayName) {
+        return res
+          .status(409)
+          .json({ status: "warn", msg: "Display Name already in use" });
+      }
+      user.displayName = displayName;
+    }
+
+    if (location !== undefined) user.location = location; // Izinkan string kosong
+    if (bio !== undefined) user.bio = bio; // Izinkan string kosong
+
+    const updatedUser = await user.save(); // Panggil save() agar pre-save hook hashing password berjalan
+
+    res.status(200).json({
+      status: "success",
+      msg: "Profile updated",
+      user: updatedUser.toObject({
+        getters: true,
+        virtuals: false,
+        transform: (doc, ret) => {
+          delete ret.password;
+          return ret;
+        },
+      }), // Hapus password dari respon
     });
   } catch (error) {
     console.error(error);

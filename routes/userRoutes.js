@@ -7,8 +7,8 @@ import {
   getUserProfile,
   handleFollow,
   handleUnfollow,
-  handleDeleteAccount,
   getNewestUser,
+  updateUserProfile,
 } from "../controllers/userController.js";
 import { authenticateToken } from "../middleware/authMiddleware.js";
 import {
@@ -23,26 +23,31 @@ router.post("/createUserProfile", authenticateToken, createUserProfile);
 
 router.post(
   "/upload-profile-pict",
+  authenticateToken,
   uploadProfilePict.single("profilePict"),
   uploadProfilePicture
 );
 
-router.post("/upload-banner", bannerUpload.single("banner"), uploadBanner);
+router.post(
+  "/upload-banner",
+  authenticateToken,
+  bannerUpload.single("banner"),
+  uploadBanner
+);
+
+// Update User Profile
+router.put("/profile", authenticateToken, updateUserProfile);
 
 // Get newest user
-router.get("/get/users", getNewestUser);
+router.get("/newest", getNewestUser);
 
 // Notification page
-router.post("/get/notifications", authenticateToken, getNotifications);
-
+router.get("/notifications", authenticateToken, getNotifications);
 // User profile page
-router.post("/get/userProfile", getUserProfile);
+router.get("/:userId", getUserProfile);
 
 // handle follow
-router.post("/:userId/follow/:targetUserId", handleFollow);
-router.post("/:userId/unfollow/:targetUserId", handleUnfollow);
-
-// ! Delete account
-router.post("/delete/:userId", handleDeleteAccount);
+router.post("/:targetUserId/follow", handleFollow);
+router.post("/:targetUserId/unfollow", handleUnfollow);
 
 export default router;
