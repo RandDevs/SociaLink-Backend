@@ -4,6 +4,8 @@ import User from "../models/User.js";
 import Post from "../models/Post.js";
 import Comment from "../models/Comment.js";
 import isEmail from "../functions/isEmail.js";
+// import Notifications from "../models/Notifications.js"
+
 // User sign-up controller
 export const signup = async (req, res) => {
   try {
@@ -89,6 +91,7 @@ export const deleteAccount = async (req, res) => {
   const { userId } = req.params;
   const authenticatedUserId = req.user.userId;
   console.log(authenticatedUserId);
+  console.log(req.user);
 
   try {
     if (userId !== authenticatedUserId) {
@@ -115,18 +118,6 @@ export const deleteAccount = async (req, res) => {
       { $pull: { following: userId } } // Mengubah 'followings' menjadi 'following'
     );
 
-    // 5. Hapus notifikasi yang dikirim ke/dari user ini
-    // (Jika ada model Notifikasi terpisah, ini akan lebih mudah)
-    // await Notification.deleteMany({ $or: [{ recipient: userId }, { sender: userId }] });
-
-    // --- AKHIR LOGIKA PENGHAPUSAN DATA TERKAIT ---
-
-    // Akhirnya, hapus akun user itu sendiri
-    await User.findByIdAndDelete(userId);
-
-    res
-      .status(200)
-      .json({ status: "success", msg: "Account deleted successfully!" });
     // 5. Hapus notifikasi yang dikirim ke/dari user ini
     // (Jika ada model Notifikasi terpisah, ini akan lebih mudah)
     // await Notification.deleteMany({ $or: [{ recipient: userId }, { sender: userId }] });

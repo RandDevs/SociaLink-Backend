@@ -5,7 +5,6 @@ import {
   getPostById,
   likePost,
   unlikePost,
-  getComments,
   addComment,
   deleteComment,
   deletePost,
@@ -39,6 +38,10 @@ router.post("/:postId/unlike", authenticateToken, unlikePost);
 
 router.post("/:postId/comment", addComment);
 
+// Delete a comment
+router.delete("/:postId/comments/:commentId", authenticateToken, deletePost);
+
+// Delete a post
 router.delete("/:postId", authenticateToken, deletePost);
 
 export default router;

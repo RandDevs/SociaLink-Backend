@@ -2,6 +2,7 @@ import Post from "../models/Post.js";
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
 import Comment from "../models/Comment.js"; // Import Comment
+import isEmail from "../functions/isEmail.js";
 // import Notification from "../models/Notification.js"; // Akan kita import jika sudah ada model Notifikasi terpisah
 import fs from "fs";
 import path from "path";
@@ -130,12 +131,10 @@ export const updateUserProfile = async (req, res) => {
     if (password) {
       // Password akan dihash otomatis oleh pre('save') hook
       if (password.length < 8 || password.length > 64) {
-        return res
-          .status(400)
-          .json({
-            status: "error",
-            msg: "Password must be between 8 and 64 characters",
-          });
+        return res.status(400).json({
+          status: "error",
+          msg: "Password must be between 8 and 64 characters",
+        });
       }
       user.password = password;
     }
@@ -178,24 +177,52 @@ export const updateUserProfile = async (req, res) => {
 
 // * GET USER INFO
 export const getUserProfile = async (req, res) => {
-  const { userId } = req.body;
+  const { userId } = req.params;
   try {
-    const user = await User.findById(userId);
-    const userPosts = await Post.find({ userId });
+    const user = await User.findById(userId)
+      .select("-password")
+      .populate("followers", "displayName picturePath")
+      .populate("following", "displayName picturePath");
 
     if (!user) {
-      throw new Error("User not found");
+      throw res.status(404).json({ status: "error", msg: "User not found" });
     }
+    const userPosts = await Post.find({ userId })
+      .populate("user", "displayName picturePath") // Populate user di post
+      .populate({
+        // Populate comments dan user di dalam komentar
+        path: "comments",
+        populate: {
+          path: "user",
+          select: "displayName picturePath",
+        },
+      })
+      .sort({ createdAt: -1 });
 
-    res.status(200).json({ user, userPosts });
+    res.status(200).json({
+      user: {
+        _id: user._id,
+        email: user.email,
+        displayName: user.displayName,
+        bio: user.bio,
+        location: user.location,
+        picturePath: user.picturePath,
+        bannerPath: user.bannerPath,
+        followers: user.followers,
+        following: user.following,
+        postCount: userPosts.length, // Tambahkan jumlah post
+      },
+      userPosts, // Kirim posts terpisah
+    });
   } catch (err) {
     console.log(err.message);
-    res.status(500).json({ status: "error", msg: "Error" });
+    res.status(500).json({ status: "error", msg: "Internal server error" });
   }
 };
 
+// ! WE STRANDED HERE --  WE BEGIN TONIGHT
 export const getNotifications = async (req, res) => {
-  const { userId } = req.body;
+  const { userId } = req.user.userId;
   try {
     const user = await User.findById(userId);
     if (!user)
