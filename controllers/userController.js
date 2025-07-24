@@ -9,12 +9,27 @@ import path from "path";
 // * UPLOADS HANDLER
 export const uploadProfilePicture = async (req, res) => {
   try {
-    const user = await User.findById(req.body._id);
+    // userId dari authenticateToken middleware
+    const userId = req.user.userId;
+    const user = await User.findById(userId);
     if (!user)
       return res.status(404).json({ status: "error", msg: "User not found" });
 
-    const picturePath = req.file.path;
-    await User.updateOne({ _id: req.body._id }, { $set: { picturePath } });
+    // Hapus gambar profil lama jika ada dan bukan default
+    if (
+      user.picturePath &&
+      user.picturePath !== "https://via.placeholder.com/150"
+    ) {
+      const oldPicturePath = path.join(__dirname, "..", user.picturePath); // Asumsi path relatif dari server root
+      if (fs.existsSync(oldPicturePath)) {
+        fs.unlinkSync(oldPicturePath);
+      }
+    }
+
+    const picturePath = req.file
+      ? req.file.path.replace(/\\/g, "/")
+      : user.picturePath; // Normalize path
+    await User.updateOne({ _id: userId }, { $set: { picturePath } });
 
     res.status(200).json({ status: "success", picturePath });
   } catch (error) {
@@ -25,12 +40,23 @@ export const uploadProfilePicture = async (req, res) => {
 
 export const uploadBanner = async (req, res) => {
   try {
-    const user = await User.findById(req.body._id);
+    const userId = req.user.userId; // userId dari authenticateToken middleware
+    const user = await User.findById(userId);
     if (!user)
       return res.status(404).json({ status: "error", msg: "User not found" });
 
-    const bannerPath = req.file.path;
-    await User.updateOne({ _id: req.body._id }, { $set: { bannerPath } });
+    // Hapus banner lama jika ada
+    if (user.bannerPath) {
+      const oldBannerPath = path.join(__dirname, "..", user.bannerPath); // Asumsi path relatif dari server root
+      if (fs.existsSync(oldBannerPath)) {
+        fs.unlinkSync(oldBannerPath);
+      }
+    }
+
+    const bannerPath = req.file
+      ? req.file.path.replace(/\\/g, "/")
+      : user.bannerPath; // Normalize path
+    await User.updateOne({ _id: userId }, { $set: { bannerPath } });
 
     res.status(200).json({ status: "success", bannerPath });
   } catch (error) {
@@ -38,7 +64,6 @@ export const uploadBanner = async (req, res) => {
     res.status(500).json({ status: "error", msg: "Internal server error" });
   }
 };
-
 // * CREATE USER PROFILE
 export const createUserProfile = async (req, res) => {
   try {
@@ -220,14 +245,13 @@ export const getUserProfile = async (req, res) => {
   }
 };
 
-// ! WE STRANDED HERE --  WE BEGIN TONIGHT
 export const getNotifications = async (req, res) => {
   const { userId } = req.user.userId;
   try {
     const user = await User.findById(userId);
     if (!user)
       return res.status(404).json({ status: "error", msg: "User not found" });
-
+    // const notifications = await Notification.find({ recipient: userId }).populate('sender', 'displayName picturePath').sort({ createdAt: -1 });
     res.status(200).json({ notifications: user.notifications });
   } catch (err) {
     res.status(500).json({ status: "error", msg: "Internal server error" });
@@ -235,12 +259,15 @@ export const getNotifications = async (req, res) => {
 };
 
 export const getNewestUser = async (req, res) => {
-  const { limit } = req.query;
+  const { limit = 5 } = req.query;
 
   try {
-    const users = await User.find({ displayName: { $exists: true, $ne: null } })
+    const users = await User.find({
+      displayName: { $exists: true, $ne: null, $ne: "" },
+    })
       .sort({ createdAt: -1 })
-      .limit(Number(limit));
+      .limit(Number(limit))
+      .select("-password");
     res.status(200).json({ users });
   } catch (err) {
     res.status(500).json({ status: "error", msg: "Internal serever error" });
@@ -249,67 +276,96 @@ export const getNewestUser = async (req, res) => {
 
 // * FOLLOW HANDLER
 export const handleFollow = async (req, res) => {
-  const { userId, targetUserId } = req.params;
+  const { targetUserId } = req.params;
+  const userId = req.user.userId;
   try {
     const user = await User.findById(userId);
     const targetUser = await User.findById(targetUserId);
 
     if (!user || !targetUser) {
-      throw new Error("User not found");
+      return res.status(404).json({ status: "error", msg: "User not found" });
+    }
+
+    if (user._id.toString() === targetUser._id.toString()) {
+      return res
+        .status(400)
+        .json({ status: "error", msg: "You cannot follow yourself" });
     }
 
     // Send notification
+    // if (!targetUser.followers.includes(userId)) {
+    //   targetUser.followers.push(userId);
+
+    //   targetUser.notifications.push({
+    //     picturePath: user.picturePath,
+    //     displayName: user.displayName,
+    //     notification: "following you",
+    //     date: new Date(),
+    //     type: "follow",
+    //     state: "unread",
+    //   });
+    //   await targetUser.save();
+    // }
+
+    // Tambahkan ke followers targetUser jika belum ada
     if (!targetUser.followers.includes(userId)) {
       targetUser.followers.push(userId);
-
-      targetUser.notifications.push({
-        picturePath: user.picturePath,
-        displayName: user.displayName,
-        notification: "following you",
-        date: new Date(),
+      // Trigger notifikasi jika ada model Notification terpisah
+      await Notification.create({
+        recipient: targetUserId,
+        sender: userId,
         type: "follow",
-        state: "unread",
+        content: `${user.displayName} started following you.`,
+        link: `/profile/${userId}`,
       });
-      await targetUser.save();
     }
 
-    if (!user.followings.includes(targetUser._id)) {
-      user.followings.push(targetUser._id);
-      await user.save();
+    // Tambahkan ke following user yang login jika belum ada
+    if (!user.following.includes(targetUserId)) {
+      user.following.push(targetUserId);
     }
+
+    await user.save();
+    await targetUser.save();
 
     res.status(200).json({ status: "success", msg: "Succeded to follow" });
   } catch (err) {
     console.log(err.message);
-    res.status(500).json({ status: "error", msg: "Error" });
+    res.status(500).json({ status: "error", msg: "Internal server error" });
   }
 };
 
 export const handleUnfollow = async (req, res) => {
-  const { userId, targetUserId } = req.params;
+  const { targetUserId } = req.params;
+  const userId = req.user.userId;
   try {
     const user = await User.findById(userId);
     const targetUser = await User.findById(targetUserId);
 
     if (!user || !targetUser) {
-      throw new Error("User not found");
+      return res.status(404).json({ status: "error", msg: "User not found" });
+    }
+
+    if (user._id.toString() === targetUser._id.toString()) {
+      return res
+        .status(400)
+        .json({ status: "error", msg: "You cannot unfollow yourself" });
     }
 
     // remove followings
-    const indexUser = user.followings.indexOf(targetUserId);
-    if (indexUser > -1) {
-      user.followings.splice(indexUser, 1);
-      await user.save();
-      console.log("remove followings");
-    }
+    // Hapus dari followers targetUser
+    targetUser.followers = targetUser.followers.filter(
+      (followerId) => followerId.toString() !== userId.toString()
+    );
 
     // remove followers for target user
-    const indexTargetUser = targetUser.followers.indexOf(userId);
-    if (indexTargetUser > -1) {
-      targetUser.followers.splice(indexTargetUser, 1);
-      await targetUser.save();
-      console.log("remove followers");
-    }
+    user.following = user.following.filter(
+      // Mengubah 'followings' menjadi 'following'
+      (followingId) => followingId.toString() !== targetUserId.toString()
+    );
+
+    await user.save();
+    await targetUser.save();
 
     console.log("hitted");
     res.status(200).json({ status: "success", msg: "Succeded to unfollow" });
@@ -319,37 +375,37 @@ export const handleUnfollow = async (req, res) => {
   }
 };
 
-// ! DELETE ACCOUNT API
-export const handleDeleteAccount = async (req, res) => {
-  const { userId } = req.params;
-  console.log(req.params);
-  try {
-    const user = await User.findById(userId);
-    const userPosts = await Post.find({ userId: userId });
+// // ! DELETE ACCOUNT API
+// export const handleDeleteAccount = async (req, res) => {
+//   const { userId } = req.params;
+//   console.log(req.params);
+//   try {
+//     const user = await User.findById(userId);
+//     const userPosts = await Post.find({ userId: userId });
 
-    if (!user) {
-      throw new Error("User not found");
-    }
+//     if (!user) {
+//       throw new Error("User not found");
+//     }
 
-    // // Delete the image file if it exists
-    // if (user.picturePath) {
-    // 	const picturePath = path.join(__dirname, user.imagePath);
-    // 	fs.unlink(picturePath, (err) => {
-    // 		if (err) {
-    // 			console.error("Error deleting the image:", err);
-    // 			throw new Error("Error deleting your account!");
-    // 		} else {
-    // 			console.log("Image deleted successfully");
-    // 		}
-    // 	});
-    // }
+//     // // Delete the image file if it exists
+//     // if (user.picturePath) {
+//     // 	const picturePath = path.join(__dirname, user.imagePath);
+//     // 	fs.unlink(picturePath, (err) => {
+//     // 		if (err) {
+//     // 			console.error("Error deleting the image:", err);
+//     // 			throw new Error("Error deleting your account!");
+//     // 		} else {
+//     // 			console.log("Image deleted successfully");
+//     // 		}
+//     // 	});
+//     // }
 
-    // await User.findByIdAndDelete(userId);
-    res
-      .status(200)
-      .json({ status: "success", msg: "Account deleted!", userPosts });
-  } catch (err) {
-    console.log(err.message);
-    res.status(500).json({ status: "error", msg: "Internal server error!" });
-  }
-};
+//     // await User.findByIdAndDelete(userId);
+//     res
+//       .status(200)
+//       .json({ status: "success", msg: "Account deleted!", userPosts });
+//   } catch (err) {
+//     console.log(err.message);
+//     res.status(500).json({ status: "error", msg: "Internal server error!" });
+//   }
+// };
